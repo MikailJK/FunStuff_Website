@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+/* base styles */
+body {
+  background: #101214;
+  @apply text-gray-500 m-8;
+}
+h1, h2 {
+  @apply font-bold text-primary text-lg;
+}
+main {
+  @apply max-w-5xl my-12 mx-auto px-8;
+}
+main > h2 {
+  @apply mb-4 pb-2 text-base ;
+}
+p > a {
+  @apply text-primary underline;
+}
+
+/* nav styles */
+nav {
+  @apply
+    grid
+    grid-flow-col
+    pb-5
+    justify-stretch
+    /* flex items-center gap-5  */
+    my-10 mx-auto 
+    w-full
+    /* max-w-5xl; */
+}
+nav a {
+  @apply text-gray-500 pl-9 text-xl;
+}
+nav a:hover {
+  @apply text-black;
+}
+main nav {
+  @apply border-0;
+}
