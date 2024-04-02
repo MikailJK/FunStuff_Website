@@ -3,12 +3,13 @@ import Link from "next/link"
 export default function Navbar() {
   return (
     <nav>
-      <h1 class="text-3xl pl-5">Mikail Krochta</h1>
-      <div class="justify-self-end grid grid-flow-col mx-5">
+      <h1 className="text-3xl pl-5">Mikail Krochta</h1>
+      <div className="justify-self-end grid grid-flow-col mx-5">
         <Link href="./">Home</Link>
         <Link href="./about">About</Link>
+        <Link href="./funstuff">Fun Stuff</Link>
         <Link href="https://www.linkedin.com/in/mikail-krochta-1216691a2/" target="_blank">
-          <span class="[&>svg]:h-6 [&>svg]:w-6">
+          <span className="[&>svg]:h-6 [&>svg]:w-6">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="currentColor"
