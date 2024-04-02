@@ -18,9 +18,10 @@ export default async function APOD(props) {
 
   return (
     <main className="min-h-screen grid justify-items-center">
+      <h2>{process.env.NEXT_PUBLIC_TEST}</h2>
       <div className="">
         <h2 >{res.title}</h2>
-        < Image src={res.hdurl} alt="asdf" width={500} height={500} />
+        < Image src={res.hdurl} alt="Image" width={500} height={500} />
         <p>{res.explanation}</p>
       </div>
 
