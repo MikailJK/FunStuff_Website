@@ -1,10 +1,12 @@
-import MyMap from "../components/MyMap"
+import MyMap from "./MyMap"
+import { getSheetsData } from "../_lib/readSheet"
 
-export default function Where() {
+export default async function Where() {
+  const data = await getSheetsData()
+
   return (
-    <main className="flex place-items-center">
-      <MyMap />
-      <h1>Where is my home town?</h1>
+    <main className=" flex">
+      <MyMap data={data} />
       {/* <Map height={500} width={500} defaultCenter={[50.879, 4.6997]} defaultZoom={11} > */}
       {/* </Map > */}
     </main >
