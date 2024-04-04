@@ -35,9 +35,10 @@ export default function MyMap({ data }) {
   }
 
   return (
-    <main className="grid grid-cols-1 lg:grid-cols-2 place-items-center gap-x-9">
-      <div className="">
-        <Map height={500} width={500} twoFingerDrag={true} defaultCenter={[49, 8.5]} defaultZoom={4} onClick={handleClick}>
+    <main className="grid grid-cols-1 lg:grid-cols-2 h-[50vh] gap-x-4">
+
+      <div className="border-4 rounded-lg border-[#aaaaaa]">
+        <Map defaultHeight={true} twoFingerDrag={true} zoom={true} defaultCenter={[49, 8.5]} defaultZoom={4} onClick={handleClick}>
           {pinDropped && (
 
             <Marker
@@ -50,33 +51,34 @@ export default function MyMap({ data }) {
         </Map>
         <h1 className="text-4xl">Points: {totalPoints}</h1>
       </div>
-      <div className="h-full grid grid-cols-1 grid-rows-4 place-content-stretch">
-        <p className="text-center">Place a pin on the map as close as you can to the answer.</p>
+
+      <div className="bg-[#16191c] border-4 border-[#aaaaaa] rounded-lg grid grid-cols-1 grid-rows-3 place-content-stretch">
+        <p className="text-center self-center">Place a pin on the map as close as you can to the answer.</p>
         {qIndex < data.length && (
-          < h1 className="text-center">{data[qIndex][0]}</h1>
+          < h1 className="text-center self-center text-xl pb-4">{data[qIndex][0]}</h1>
         )}
         {qIndex >= data.length && (
           <>
             <h1 className="text-center">Thanks for playing!</h1>
-            <h1 className="text-center">Final Score: {totalPoints}/{100 * (data.length - 1)}</h1>
+            <h1 className="text-center text-4xl">Final Score: {totalPoints}/{100 * (data.length - 1)} !</h1>
           </>
         )}
         {pinDropped && qIndex < data.length && (
-          <div className="flex place-self-center">
-            <h1 className="pl-5">Lat: {Math.round(latlong[0] * 10000) / 10000}</h1>
-            <h1 className="pl-5">Long: {Math.round(latlong[1] * 10000) / 10000}</h1>
-            <button onClick={handleSubmit} className="pl-5 w-full">
-              <div className="bg-zinc-300 rounded">
+          <div className="flex flex-col items-center">
+            <h1>Lat: {Math.round(latlong[0] * 10000) / 10000}</h1>
+            <h1>Long: {Math.round(latlong[1] * 10000) / 10000}</h1>
+            <button onClick={handleSubmit}>
+              <div className="bg-[#aaaaaa] rounded w-28">
                 <h6 className="text-black">Submit</h6>
               </div>
             </button>
           </div>
         )}
         {submitted && points > 0 && (
-          <h1 className="place-self-center"> You got: {points} points out of 100!</h1>
+          <h1 className="place-self-center pb-4"> You got: {points} points out of 100!</h1>
         )}
         {submitted && points <= 0 && (
-          <h1 className="place-self-center"> You got: {points} points, you can do better!</h1>
+          <h1 className="place-self-center pb-4"> You got: {points} points, you can do better!</h1>
         )}
       </div>
 
