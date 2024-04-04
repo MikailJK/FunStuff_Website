@@ -13,7 +13,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" class="scrollbar-hide">
+    <html lang="en" className="scrollbar-hide">
       <body className={inter.className}>
         <Navbar />
         {children}

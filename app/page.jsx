@@ -5,9 +5,9 @@ export default async function main() {
 
 
   return (
-    <main class="min-h-screen grid place-content-center">
-      <div class="">
-        <h2 class="">Hola!</h2>
+    <main className="min-h-screen grid place-content-center">
+      <div className="">
+        <h2 className="">Hola!</h2>
       </div>
     </main>
   )

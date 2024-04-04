@@ -1,5 +1,7 @@
 import { google } from "googleapis"
 
+export const revalidate = 0
+
 export const getSheetsData = async () => {
   const auth = new google.auth.GoogleAuth({
     credentials: {
