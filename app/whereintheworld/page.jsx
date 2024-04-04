@@ -1,6 +1,8 @@
 import MyMap from "./MyMap"
 import { getSheetsData } from "../_lib/readSheet"
 
+export const revalidate = 0
+
 export default async function Where() {
   const data = await getSheetsData()
 
