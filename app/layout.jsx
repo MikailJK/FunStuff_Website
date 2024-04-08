@@ -1,5 +1,8 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
+import Particles from "./components/Particles"
+import Image from "next/image"
+import bgImage from "./components/bridge.jpg"
 
 //components
 import Navbar from "./components/Navbar";
@@ -15,9 +18,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className="scrollbar-hide">
       <body className={inter.className}>
-        <Navbar />
+        <Particles />
+        <Navbar className="fixed top-0 left-0" />
         {children}
       </body>
     </html>
   )
 }
+
+
