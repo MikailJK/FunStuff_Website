@@ -36,6 +36,13 @@ export default function funstuff() {
           {/* <Image src={Nasa} alt="Nasa Images" objectFit="cover" /> */}
           Coming soon...
         </a>
+        <a href="./antsimulation" className="bg-[#1D2125]
+          rounded-xl
+          h-[200px]
+          flex items-center
+          justify-center overflow-hidden">
+          Ant Simulation
+        </a>
       </div>
     </main >
   )
