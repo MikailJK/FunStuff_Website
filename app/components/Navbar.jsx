@@ -2,14 +2,14 @@ import Link from "next/link"
 
 export default function Navbar() {
   return (
-    <nav>
-      <h1 className="text-3xl pl-5">Mikail Krochta</h1>
-      <div className="justify-self-end grid grid-flow-col mx-5">
-        <Link href="../">Home</Link>
-        <Link href="../about">About</Link>
-        <Link href="../funstuff">Fun Stuff</Link>
-        <Link href="https://www.linkedin.com/in/mikail-krochta-1216691a2/" target="_blank">
-          <span className="[&>svg]:h-6 [&>svg]:w-6">
+    <nav className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <h1 className="text-2xl sm:text-3xl pl-5">Mikail Krochta</h1>
+      <div className="flex items-center flex-wrap mt-2 sm:mt-0">
+        <Link href="../" className="pl-5 sm:pl-9">Home</Link>
+        <Link href="../about" className="pl-5 sm:pl-9">About</Link>
+        <Link href="../funstuff" className="pl-5 sm:pl-9">Fun Stuff</Link>
+        <Link href="https://www.linkedin.com/in/mikail-krochta-1216691a2/" target="_blank" className="pl-5 sm:pl-9">
+          <span className="[&>svg]:h-5 [&>svg]:w-5 sm:[&>svg]:h-6 sm:[&>svg]:w-6">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="currentColor"
@@ -20,6 +20,6 @@ export default function Navbar() {
           </span>
         </Link>
       </div>
-    </nav >
+    </nav>
   )
 }

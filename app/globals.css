@@ -7,13 +7,13 @@
 /* base styles */
 body {
   background: #101214;
-  @apply text-gray-500 m-8;
+  @apply text-gray-500 mx-4 my-4 sm:m-8;
 }
 h1, h2 {
   @apply font-bold text-primary text-lg;
 }
 main {
-  @apply max-w-5xl mx-auto px-8;
+  @apply max-w-5xl mx-auto px-4 sm:px-8;
 }
 main > h2 {
   @apply mb-4 pb-2 text-base ;
@@ -24,21 +24,13 @@ p > a {
 
 /* nav styles */
 nav {
-  @apply
-    grid
-    grid-flow-col
-    pb-5
-    justify-stretch
-    /* flex items-center gap-5  */
-    my-10 mx-auto 
-    w-full
-    /* max-w-5xl; */
+  @apply pb-5 my-4 sm:my-10 mx-auto w-full;
 }
 nav a {
-  @apply text-gray-500 pl-9 text-xl;
+  @apply text-gray-500 text-base sm:text-xl;
 }
 nav a:hover {
-  @apply text-black;
+  @apply text-primary;
 }
 main nav {
   @apply border-0;
