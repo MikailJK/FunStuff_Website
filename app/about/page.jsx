@@ -166,7 +166,7 @@ export default function About() {
         <div className="bio-grid">
           <div className="bio-text">
             I&apos;m a software engineer with a background spanning <em>backend systems, distributed computing, and applied machine learning</em>. I thrive in environments where there&apos;s a lot to learn, I pick things up quickly and go deep, whether that&apos;s mastering a new codebase or becoming a go-to resource for the team on a complex domain.<br /><br />
-            Outside of software, I volunteer as an associate editor for a community-focused philosophy journal. I'm drawn to independent study across mathematics, philosophy, and computer science, and bring that same curiosity into my technical work.
+            Outside of software, I volunteer as an associate editor for a community-focused philosophy journal. I&apos;m drawn to independent study across mathematics, philosophy, and computer science, and bring that same curiosity into my technical work.
             </div>
 
           <div className="right-col">
