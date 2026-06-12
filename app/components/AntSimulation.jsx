@@ -219,37 +219,28 @@ export default function AntSimulation() {
   ]
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: 16 }}>
+    <div className="flex flex-col items-center gap-4 w-full">
       <canvas
         ref={canvasRef}
         width={600}
         height={600}
-        style={{ display: "block", background: "#1a1a1a" }}
-      />
-      {/* <button
-        onClick={toggleFreeMode}
         style={{
-          width: 600,
-          padding: "8px 0",
-          borderRadius: 8,
-          border: "none",
-          cursor: "pointer",
-          fontSize: 14,
-          fontWeight: "bold",
-          background: freeMode ? "#4a9eff" : "#444",
-          color: "#fff",
+          display: "block",
+          background: "#1a1a1a",
+          width: "100%",
+          maxWidth: 600,
+          aspectRatio: "1 / 1",
         }}
-      >
-        {freeMode ? "Free Mode (always pheromones)" : "Normal Mode (food + nest)"}
-      </button> */}
+      />
       <div style={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: "12px 32px",
+        gap: "12px 24px",
         background: "#222",
         padding: 16,
         borderRadius: 8,
-        width: 600,
+        width: "100%",
+        maxWidth: 600,
         boxSizing: "border-box",
       }}>
         {sliders.map(({ key, label, min, max, step, unit }) => (
