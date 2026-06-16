@@ -5,7 +5,7 @@ export default async function Nasa({ params }) {
   const date = params.date
   return (
     <main>
-      <Link href="../nasaphoto">Back</Link>
+      <Link href="/nasaphoto">Back</Link>
       <APOD date={date} />
     </main>
   )
