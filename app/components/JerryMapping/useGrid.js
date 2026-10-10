@@ -2,7 +2,7 @@ import { useReducer, useCallback } from 'react';
 import { GRID_COLS, GRID_ROWS } from './config.js';
 
 function emptyTile() {
-  return { lines: [], regions: [], edgeSegments: null };
+  return { lines: [], regions: [], markers: [], edgeSegments: null };
 }
 
 function createStartingTile() {
@@ -11,6 +11,7 @@ function createStartingTile() {
   return {
     lines: [],
     regions: [{ seed: { x: 0.5, y: 0.5 }, type }],
+    markers: [],
     edgeSegments: { top: [...seg], bottom: [...seg], left: [...seg], right: [...seg] },
   };
 }
@@ -61,21 +62,48 @@ export function useGrid() {
     };
   }, [grid]);
 
-  const getCandidateTiles = useCallback((count = 3) => {
+  // Edge-pair markers (roads, ley lines, bridges) that end on a neighbor's
+  // shared edge, mirrored onto this tile's edges so new roads can snap to them.
+  // Returns { top, bottom, left, right }, each [{ t, type }].
+  const getRoadConnections = useCallback((col, row) => {
+    const pts = { top: [], bottom: [], left: [], right: [] };
+    const collect = (c, r, theirEdge, ourEdge) => {
+      if (c < 0 || c >= GRID_COLS || r < 0 || r >= GRID_ROWS) return;
+      for (const m of grid[r * GRID_COLS + c]?.markers ?? []) {
+        for (const end of [m.from, m.to]) {
+          if (end?.edge === theirEdge) pts[ourEdge].push({ t: end.t, type: m.type });
+        }
+      }
+    };
+    collect(col - 1, row,     'right',  'left');
+    collect(col + 1, row,     'left',   'right');
+    collect(col,     row - 1, 'bottom', 'top');
+    collect(col,     row + 1, 'top',    'bottom');
+    return pts;
+  }, [grid]);
+
+  // target 'empty':     blank tiles adjacent to drawn ones (terrain cards)
+  // target 'populated': already-drawn tiles (civilization and void cards)
+  const getCandidateTiles = useCallback((count = 3, target = 'empty') => {
     const populatedSet = new Set();
     grid.forEach((tile, idx) => {
       if (tile.regions.length > 0) populatedSet.add(idx);
     });
 
-    const candidateSet = new Set();
-    for (const idx of populatedSet) {
-      const col = idx % GRID_COLS;
-      const row = Math.floor(idx / GRID_COLS);
-      for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-        const c = col + dc, r = row + dr;
-        if (c >= 0 && c < GRID_COLS && r >= 0 && r < GRID_ROWS) {
-          const nIdx = r * GRID_COLS + c;
-          if (!populatedSet.has(nIdx)) candidateSet.add(nIdx);
+    let candidateSet;
+    if (target === 'populated') {
+      candidateSet = populatedSet;
+    } else {
+      candidateSet = new Set();
+      for (const idx of populatedSet) {
+        const col = idx % GRID_COLS;
+        const row = Math.floor(idx / GRID_COLS);
+        for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const c = col + dc, r = row + dr;
+          if (c >= 0 && c < GRID_COLS && r >= 0 && r < GRID_ROWS) {
+            const nIdx = r * GRID_COLS + c;
+            if (!populatedSet.has(nIdx)) candidateSet.add(nIdx);
+          }
         }
       }
     }
@@ -93,5 +121,5 @@ export function useGrid() {
     return candidates.slice(0, count);
   }, [grid]);
 
-  return { grid, updateTile, resetGrid, getConstraints, getCandidateTiles };
+  return { grid, updateTile, resetGrid, getConstraints, getRoadConnections, getCandidateTiles };
 }

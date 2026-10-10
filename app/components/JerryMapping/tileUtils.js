@@ -1,6 +1,7 @@
 import {
   REGION_CONFIG, STROKE_COLOR, STROKE_WIDTH_PX, TILE_EDITOR_SIZE,
 } from './config.js';
+import { STAMP_REGISTRY } from './stamps.js';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -87,10 +88,21 @@ function computeRegionMap(size, lines, regions) {
   return regionMap;
 }
 
+// Draws stamp markers (villages, roads, ...) on top of the terrain.
+// Dispatches to the stamp registry; unknown marker types are skipped.
+export function drawMarkers(ctx, markers, size) {
+  if (!markers?.length) return;
+  for (const marker of markers) {
+    STAMP_REGISTRY[marker.type]?.render(ctx, marker, size);
+  }
+}
+
 // Renders tile regions geometrically (no canvas pixel reads).
 // Lines are a separate visual layer drawn on top only when showLines = true.
-// tile = { lines: [{from:{edge,t}, to:{edge,t}}], regions: [{seed:{x,y}, type}] }
-export function renderTileToCanvas(ctx, tile, size, { showLines = true } = {}) {
+// Markers are decoration only — callers that sample pixels for region types
+// (edge segments, constraint validation) must pass showMarkers: false.
+// tile = { lines: [{from:{edge,t}, to:{edge,t}}], regions: [{seed:{x,y}, type}], markers: [] }
+export function renderTileToCanvas(ctx, tile, size, { showLines = true, showMarkers = true } = {}) {
   const { lines = [], regions = [] } = tile;
   const [er, eg, eb] = hexToRgb(REGION_CONFIG.empty.color);
 
@@ -116,6 +128,7 @@ export function renderTileToCanvas(ctx, tile, size, { showLines = true } = {}) {
 
   ctx.putImageData(imageData, 0, 0);
   if (showLines) drawLines(ctx, lines, size);
+  if (showMarkers) drawMarkers(ctx, tile.markers, size);
 }
 
 // ─── Edge segments ────────────────────────────────────────────────────────────
@@ -243,24 +256,57 @@ export function drawConstraintStrips(ctx, constraints, size) {
   drawStrip(constraints.bottom, 'bottom');
 
   ctx.globalAlpha = 1;
-  const drawTransitions = (profile, toX, toY) => {
+  // Each transition dot is split into two halves colored by the region types it
+  // separates, so the player can see what they are connecting to at a glance.
+  const drawTransitions = (profile, toX, toY, axis) => {
     if (!profile) return;
     for (let i = 0; i < profile.length - 1; i++) {
-      const t = profile[i].to;
+      const t  = profile[i].to;
+      const cx = toX(t, size, W), cy = toY(t, size, W);
+      const beforeColor = REGION_CONFIG[profile[i].type]?.color     ?? '#ffffff';
+      const afterColor  = REGION_CONFIG[profile[i + 1].type]?.color ?? '#ffffff';
+      const R = 5;
+      // axis 'h': dot on a horizontal edge — split left/right along the edge.
+      // axis 'v': dot on a vertical edge — split above/below.
+      const halves = axis === 'h'
+        ? [[Math.PI / 2, Math.PI * 1.5, beforeColor], [-Math.PI / 2, Math.PI / 2, afterColor]]
+        : [[Math.PI, Math.PI * 2, beforeColor], [0, Math.PI, afterColor]];
+      for (const [a0, a1, color] of halves) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, a0, a1);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
       ctx.beginPath();
-      ctx.arc(toX(t, size, W), toY(t, size, W), 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 1;
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
   };
 
-  drawTransitions(constraints.left,   (t, s, w) => w/2,     (t, s)    => t * s);
-  drawTransitions(constraints.right,  (t, s, w) => s - w/2, (t, s)    => t * s);
-  drawTransitions(constraints.top,    (t, s)    => t * s,   (_, s, w) => w/2);
-  drawTransitions(constraints.bottom, (t, s)    => t * s,   (_, s, w) => s - w/2);
+  drawTransitions(constraints.left,   (t, s, w) => w/2,     (t, s)    => t * s,   'v');
+  drawTransitions(constraints.right,  (t, s, w) => s - w/2, (t, s)    => t * s,   'v');
+  drawTransitions(constraints.top,    (t, s)    => t * s,   (_, s, w) => w/2,     'h');
+  drawTransitions(constraints.bottom, (t, s)    => t * s,   (_, s, w) => s - w/2, 'h');
 
   ctx.restore();
+}
+
+// ─── Line budget helper ───────────────────────────────────────────────────────
+// Minimum lines needed to honor all neighbor constraints: every transition dot
+// needs a line endpoint, a line has two endpoints on different edges, and dots
+// sharing an edge can never be paired with each other.
+
+export function getMinRequiredLines(constraints) {
+  if (!constraints) return 0;
+  let total = 0, maxPerEdge = 0;
+  for (const edge of ['top', 'bottom', 'left', 'right']) {
+    const dots = Math.max(0, (constraints[edge]?.length ?? 0) - 1);
+    total += dots;
+    maxPerEdge = Math.max(maxPerEdge, dots);
+  }
+  return Math.max(Math.ceil(total / 2), maxPerEdge);
 }

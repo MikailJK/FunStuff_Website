@@ -1,5 +1,6 @@
 "use client"
 import { REGION_CONFIG } from './config.js';
+import { STAMP_REGISTRY } from './stamps.js';
 
 export function CardPanel({ currentCard, history, onDraw, onCancel, hasCard }) {
   return (
@@ -41,7 +42,7 @@ export function CardPanel({ currentCard, history, onDraw, onCancel, hasCard }) {
             <div className="p-4 bg-slate-800 space-y-3">
               <p className="text-xs text-slate-400 italic leading-relaxed">{currentCard.flavorText}</p>
 
-              {/* Allowed region palette */}
+              {/* Allowed regions / stamps / void effect */}
               {currentCard.allowedTypes.length > 0 ? (
                 <div>
                   <p className="text-xs text-slate-500 mb-1.5">Available regions</p>
@@ -54,6 +55,19 @@ export function CardPanel({ currentCard, history, onDraw, onCancel, hasCard }) {
                         />
                         {REGION_CONFIG[type]?.name}
                       </div>
+                    ))}
+                  </div>
+                </div>
+              ) : currentCard.allowedMarkers?.length > 0 ? (
+                <div>
+                  <p className="text-xs text-slate-500 mb-1.5">Settlement stamps — play on a drawn tile</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {currentCard.allowedMarkers.map(id => (
+                      <span key={id}
+                        className="text-xs px-1.5 py-0.5 rounded border border-slate-600 text-slate-300 bg-slate-900"
+                      >
+                        {STAMP_REGISTRY[id]?.name ?? id}
+                      </span>
                     ))}
                   </div>
                 </div>

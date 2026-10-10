@@ -1,11 +1,13 @@
 "use client"
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
   TILE_EDITOR_SIZE, REGION_CONFIG, STROKE_WIDTH_PX,
 } from './config.js';
 import {
   renderTileToCanvas, computeEdgeSegments, drawConstraintStrips, validateConstraints,
+  drawMarkers, pixelToRegion, hexToRgb,
 } from './tileUtils.js';
+import { STAMP_REGISTRY, edgePointNorm } from './stamps.js';
 
 const SIZE = TILE_EDITOR_SIZE;
 
@@ -21,47 +23,63 @@ function coordsFromEvent(e, canvas) {
   };
 }
 
-const SNAP_DIVISIONS = 32;
-const CONSTRAINT_SNAP_RADIUS = 100 / SIZE;   // 15px in canvas space
+const SNAP_DIVISIONS  = 32;
+const DOT_SNAP_RADIUS = 20 / SIZE;   // distance along the edge, normalized
 function quantize(v) { return Math.round(v * SNAP_DIVISIONS) / SNAP_DIVISIONS; }
 
-// Returns { edge, pt } for the nearest edge point.
-// If the cursor is within CONSTRAINT_SNAP_RADIUS of a constraint transition dot,
-// snaps to that dot; otherwise quantizes to the nearest 1/256th on the nearest edge.
-function snapToEdge(x, y, constraints) {
-  // Check constraint transition points first
-  if (constraints) {
-    const edgeDefs = [
-      { edge: 'top',    profile: constraints.top,    toPoint: t => ({ x: t, y: 0 }) },
-      { edge: 'bottom', profile: constraints.bottom, toPoint: t => ({ x: t, y: 1 }) },
-      { edge: 'left',   profile: constraints.left,   toPoint: t => ({ x: 0, y: t }) },
-      { edge: 'right',  profile: constraints.right,  toPoint: t => ({ x: 1, y: t }) },
-    ];
-    let best = null, bestDist = CONSTRAINT_SNAP_RADIUS;
-    for (const { edge, profile, toPoint } of edgeDefs) {
-      if (!profile) continue;
-      for (let i = 0; i < profile.length - 1; i++) {
-        const pt = toPoint(profile[i].to);
-        const d  = Math.hypot(x - pt.x, y - pt.y);
-        if (d < bestDist) { bestDist = d; best = { edge, t: profile[i].to, pt }; }
-      }
+// Snap resolution: first pick the edge nearest the cursor, then snap to dots
+// that live on THAT edge — constraint transition points, endpoints of lines
+// already drawn on this tile, and (for stamps) road connection points from
+// neighboring tiles — falling back to the quantized grid when no dot is close.
+// Returns { edge, t, pt, kind: 'constraint'|'endpoint'|'connection'|'grid' }.
+function snapToEdge(x, y, constraints, existingLines = [], connections = null) {
+  const edge = [['top', y], ['bottom', 1 - y], ['left', x], ['right', 1 - x]]
+    .reduce((a, b) => (a[1] < b[1] ? a : b))[0];
+  const along = (edge === 'top' || edge === 'bottom') ? x : y;
+  const ptFor = t =>
+    edge === 'top'    ? { x: t, y: 0 } :
+    edge === 'bottom' ? { x: t, y: 1 } :
+    edge === 'left'   ? { x: 0, y: t } : { x: 1, y: t };
+
+  const dots = [];
+  const profile = constraints?.[edge];
+  if (profile) {
+    for (let i = 0; i < profile.length - 1; i++) {
+      dots.push({ t: profile[i].to, kind: 'constraint' });
     }
-    if (best) return best;
+  }
+  for (const line of existingLines) {
+    for (const end of [line.from, line.to]) {
+      if (end.edge === edge) dots.push({ t: end.t, kind: 'endpoint' });
+    }
+  }
+  for (const conn of connections?.[edge] ?? []) {
+    dots.push({ t: conn.t, kind: 'connection' });
   }
 
-  // Fall back: quantize to 1/256th on nearest edge
-  const qx = quantize(x);
-  const qy = quantize(y);
-  const candidates = [
-    { edge: 'top',    t: qx, pt: { x: qx, y: 0  }, dist: y       },
-    { edge: 'bottom', t: qx, pt: { x: qx, y: 1  }, dist: 1 - y   },
-    { edge: 'left',   t: qy, pt: { x: 0,  y: qy }, dist: x       },
-    { edge: 'right',  t: qy, pt: { x: 1,  y: qy }, dist: 1 - x   },
-  ];
-  return candidates.reduce((a, b) => (a.dist < b.dist ? a : b));
+  let best = null, bestDist = DOT_SNAP_RADIUS;
+  for (const dot of dots) {
+    const d = Math.abs(dot.t - along);
+    // Constraint dots win ties against endpoints sitting on the same spot
+    if (d < bestDist || (d === bestDist && dot.kind === 'constraint')) {
+      bestDist = d;
+      best = dot;
+    }
+  }
+  if (best) return { edge, t: best.t, pt: ptFor(best.t), kind: best.kind };
+
+  const q = quantize(along);
+  return { edge, t: q, pt: ptFor(q), kind: 'grid' };
 }
 
 // ─── Canvas drawing helpers ───────────────────────────────────────────────────
+
+const SNAP_COLORS = {
+  constraint: 'rgba(255, 255, 255, 0.9)',
+  endpoint:   'rgba(255, 200, 60, 0.95)',
+  connection: 'rgba(201, 168, 106, 0.95)',
+  grid:       'rgba(255, 255, 255, 0.4)',
+};
 
 function drawDot(ctx, pt, color, radius = 5) {
   ctx.fillStyle = color;
@@ -82,18 +100,60 @@ function drawPreviewLine(ctx, start, end, valid) {
   ctx.stroke();
   ctx.restore();
 
-  // endpoint dots
   drawDot(ctx, start, '#ffffff', 5);
   drawDot(ctx, end,   valid ? 'rgba(120,255,140,1)' : 'rgba(255,255,255,0.4)', 5);
 }
 
-function drawHoverSnap(ctx, pt) {
+function drawHoverSnap(ctx, pt, kind) {
   ctx.save();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.strokeStyle = SNAP_COLORS[kind] ?? SNAP_COLORS.grid;
   ctx.lineWidth   = 2;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
   ctx.arc(pt.x * SIZE, pt.y * SIZE, 7, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Small amber dots marking endpoints of lines already drawn on this tile,
+// so the player can see what the snapping will grab.
+function drawOwnEndpoints(ctx, lines) {
+  for (const line of lines) {
+    for (const end of [line.from, line.to]) {
+      drawDot(ctx, edgePointNorm(end.edge, end.t), 'rgba(255, 200, 60, 0.85)', 3);
+    }
+  }
+}
+
+// Tan squares marking where roads (and other edge-pair stamps) from
+// neighboring tiles arrive at this tile's edges.
+function drawConnectionDots(ctx, connections) {
+  if (!connections) return;
+  for (const edge of ['top', 'bottom', 'left', 'right']) {
+    for (const conn of connections[edge] ?? []) {
+      const pt = edgePointNorm(edge, conn.t);
+      const px = pt.x * SIZE, py = pt.y * SIZE;
+      ctx.save();
+      ctx.fillStyle   = '#c9a86a';
+      ctx.strokeStyle = 'rgba(12, 10, 16, 0.9)';
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath();
+      ctx.rect(px - 4, py - 4, 8, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+function drawInvalidMark(ctx, x, y) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 80, 80, 0.9)';
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath();
+  ctx.arc(x * SIZE, y * SIZE, 18, 0, Math.PI * 2);
+  ctx.moveTo(x * SIZE - 13, y * SIZE + 13);
+  ctx.lineTo(x * SIZE + 13, y * SIZE - 13);
   ctx.stroke();
   ctx.restore();
 }
@@ -121,44 +181,79 @@ function drawViolationHighlights(ctx, violations, size) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TileEditor({ tile, constraints, allowedTypes, onSave, onCancel }) {
+// variant: 'terrain' — full editor on a blank tile (terrain cards, dev mode)
+//          'stamps'  — stamps only, terrain is read-only (civilization cards)
+//          'void'    — confirm-to-clear (void card)
+export function TileEditor({
+  tile, variant = 'terrain', constraints = null, connections = null,
+  allowedTypes, allowedMarkers = [], maxLines = Infinity, onSave, onCancel,
+}) {
   const canvasRef      = useRef(null);
-  const offscreenRef   = useRef(null);   // last committed render
-  const dragStart      = useRef(null);   // { pt: {x,y}, edge: string } | null
-  const lastHover      = useRef(null);   // last snapped hover point (for redraw)
+  const offscreenRef   = useRef(null);   // committed terrain + boundary lines
+  const sampleRef      = useRef(null);   // terrain only — pixel sampling for stamps
+  const dragStart      = useRef(null);   // { pt: {x,y}, edge, t } | null
   const violationsRef  = useRef([]);     // for synchronous access in draw calls
 
-  const [mode,       setMode]       = useState('line');
+  const [mode,       setMode]       = useState(variant === 'stamps' ? 'stamp' : 'line');
   const [fillType,   setFillType]   = useState(allowedTypes?.[0] ?? 'land');
-  const [lines,      setLines]      = useState(() => tile.lines    ?? []);
-  const [regions,    setRegions]    = useState(() => tile.regions  ?? []);
+  const [stampType,  setStampType]  = useState(allowedMarkers?.[0] ?? null);
+  const [lines,      setLines]      = useState(() => tile.lines   ?? []);
+  const [regions,    setRegions]    = useState(() => tile.regions ?? []);
+  const [markers,    setMarkers]    = useState(() => tile.markers ?? []);
   const [dragging,   setDragging]   = useState(false);
+  const [dragValid,  setDragValid]  = useState(false);
   const [violations, setViolations] = useState([]);
+  const [fillError,  setFillError]  = useState(false);
+  const [notice,     setNotice]     = useState(null);
+
+  const isVoid      = variant === 'void';
+  const stampOnly   = variant === 'stamps';
+  const hasStamps   = allowedMarkers.length > 0;
+  const stamp       = stampType ? STAMP_REGISTRY[stampType] : null;
+  const atLineLimit = lines.length >= maxLines;
 
   function clearViolations() {
     violationsRef.current = [];
     setViolations([]);
   }
 
-  // Re-render committed state to offscreen whenever strokes/regions/constraints change.
-  // Also clears any stale violations so the error message disappears on edit.
   useEffect(() => {
-    let oc = offscreenRef.current;
-    if (!oc || oc.width !== SIZE) {
-      oc = document.createElement('canvas');
-      oc.width = oc.height = SIZE;
-      offscreenRef.current = oc;
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), 2500);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  // Keep the selected stamp valid when the available set changes (dev toggle).
+  useEffect(() => {
+    if (stampType && !allowedMarkers.includes(stampType)) {
+      setStampType(allowedMarkers[0] ?? null);
+      if (mode === 'stamp' && !stampOnly) setMode('line');
+    } else if (!stampType && allowedMarkers.length > 0) {
+      setStampType(allowedMarkers[0]);
     }
-    renderTileToCanvas(oc.getContext('2d'), { lines, regions }, SIZE);
+  }, [allowedMarkers, stampType, mode, stampOnly]);
+
+  // Re-render committed state to the offscreen canvases whenever it changes.
+  useEffect(() => {
+    for (const ref of [offscreenRef, sampleRef]) {
+      if (!ref.current || ref.current.width !== SIZE) {
+        const oc = document.createElement('canvas');
+        oc.width = oc.height = SIZE;
+        ref.current = oc;
+      }
+    }
+    renderTileToCanvas(offscreenRef.current.getContext('2d'), { lines, regions }, SIZE);
+    renderTileToCanvas(sampleRef.current.getContext('2d'), { lines, regions }, SIZE, { showLines: false });
     if (violationsRef.current.length > 0) {
       violationsRef.current = [];
       setViolations([]);
     }
+    setFillError(false);
     blitToMain();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, regions, constraints]);
+  }, [lines, regions, markers, constraints]);
 
-  // Copy offscreen (committed state + constraints + any violation highlights) to visible canvas.
+  // Copy committed state + markers + constraint overlays to the visible canvas.
   function blitToMain(overlay) {
     const canvas = canvasRef.current;
     const oc     = offscreenRef.current;
@@ -166,114 +261,242 @@ export function TileEditor({ tile, constraints, allowedTypes, onSave, onCancel }
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, SIZE, SIZE);
     ctx.drawImage(oc, 0, 0);
+    drawMarkers(ctx, markers, SIZE);
     drawConstraintStrips(ctx, constraints, SIZE);
+    drawConnectionDots(ctx, connections);
+    drawOwnEndpoints(ctx, lines);
     drawViolationHighlights(ctx, violationsRef.current, SIZE);
     if (overlay) overlay(ctx);
   }
 
-  // ── Line tool handlers ─────────────────────────────────────────────────────
+  // Region type under a normalized point, sampled from the terrain-only canvas.
+  function sampleType(nx, ny) {
+    const oc = sampleRef.current;
+    if (!oc) return 'empty';
+    const px = Math.max(0, Math.min(SIZE - 1, Math.round(nx * SIZE)));
+    const py = Math.max(0, Math.min(SIZE - 1, Math.round(ny * SIZE)));
+    const { data } = oc.getContext('2d').getImageData(px, py, 1, 1);
+    return pixelToRegion(data[0], data[1], data[2]);
+  }
 
-  const handleMouseDown = useCallback((e) => {
-    if (mode !== 'line') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const raw     = coordsFromEvent(e, canvas);
-    const snapped = snapToEdge(raw.x, raw.y, constraints);
-    dragStart.current = snapped;
-    setDragging(true);
-  }, [mode]);
+  // ── Stamp validation ───────────────────────────────────────────────────────
 
-  const handleMouseMove = useCallback((e) => {
-    if (mode !== 'line') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const raw     = coordsFromEvent(e, canvas);
-    const snapped = snapToEdge(raw.x, raw.y, constraints);
+  function terrainNames(types) {
+    return types.map(t => REGION_CONFIG[t]?.name ?? t).join(' or ');
+  }
 
-    if (dragStart.current) {
-      // Active drag: show preview line
-      const valid = snapped.edge !== dragStart.current.edge;
-      blitToMain(ctx => drawPreviewLine(ctx, dragStart.current.pt, snapped.pt, valid));
-    } else {
-      // Hover: show snap indicator on nearest edge
-      lastHover.current = snapped.pt;
-      blitToMain(ctx => drawHoverSnap(ctx, snapped.pt));
+  function validatePointStamp(x, y) {
+    if (!stamp) return 'No stamp selected.';
+    if (stamp.terrainTypes && !stamp.terrainTypes.includes(sampleType(x, y))) {
+      return `${stamp.name} requires ${terrainNames(stamp.terrainTypes)}.`;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+    return stamp.placementValidator?.({ x, y, markers, lines, sampleType }) ?? null;
+  }
 
-  const handleMouseUp = useCallback((e) => {
-    if (mode !== 'line' || !dragStart.current) return;
+  function validateEdgePairStamp(from, to) {
+    if (!stamp) return 'No stamp selected.';
+    const p1 = edgePointNorm(from.edge, from.t);
+    const p2 = edgePointNorm(to.edge, to.t);
+    if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 0.15) {
+      return 'Drag further along the edge before releasing.';
+    }
+    if (stamp.terrainTypes) {
+      // Sample along the full curved path (it bows toward the tile center) so
+      // a road cannot pass over water anywhere along its length.
+      const mid  = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      const ctrl = { x: mid.x + (0.5 - mid.x) * 0.35, y: mid.y + (0.5 - mid.y) * 0.35 };
+      for (let i = 1; i <= 11; i++) {
+        const s = i / 12;
+        const bx = (1 - s) * (1 - s) * p1.x + 2 * (1 - s) * s * ctrl.x + s * s * p2.x;
+        const by = (1 - s) * (1 - s) * p1.y + 2 * (1 - s) * s * ctrl.y + s * s * p2.y;
+        if (!stamp.terrainTypes.includes(sampleType(bx, by))) {
+          return `${stamp.name} must stay on ${terrainNames(stamp.terrainTypes)} along its whole path.`;
+        }
+      }
+    }
+    return stamp.placementValidator?.({ from, to, markers, lines, sampleType }) ?? null;
+  }
+
+  // ── Mouse handlers ─────────────────────────────────────────────────────────
+
+  function handleMouseDown(e) {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const raw      = coordsFromEvent(e, canvas);
-    const snapped  = snapToEdge(raw.x, raw.y, constraints);
-    const isValid  = snapped.edge !== dragStart.current.edge;
+    const raw = coordsFromEvent(e, canvas);
 
-    if (isValid) {
-      const line = {
-        from: { edge: dragStart.current.edge, t: dragStart.current.t },
-        to:   { edge: snapped.edge,           t: snapped.t },
-      };
-      setLines(prev => [...prev, line]);
+    if (mode === 'line') {
+      if (atLineLimit) {
+        setNotice({ text: 'Line limit reached — undo a line or paint instead.', tone: 'warn' });
+        return;
+      }
+      dragStart.current = snapToEdge(raw.x, raw.y, constraints, lines, connections);
+      setDragging(true);
+      setDragValid(false);
+    } else if (mode === 'stamp' && stamp?.placementMode === 'edge-pair') {
+      dragStart.current = snapToEdge(raw.x, raw.y, constraints, lines, connections);
+      setDragging(true);
     }
+  }
 
+  function handleMouseMove(e) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const raw = coordsFromEvent(e, canvas);
+
+    if (mode === 'line') {
+      const snapped = snapToEdge(raw.x, raw.y, constraints, lines, connections);
+      if (dragStart.current) {
+        const valid = snapped.edge !== dragStart.current.edge;
+        if (valid !== dragValid) setDragValid(valid);
+        blitToMain(ctx => drawPreviewLine(ctx, dragStart.current.pt, snapped.pt, valid));
+      } else if (!atLineLimit) {
+        blitToMain(ctx => drawHoverSnap(ctx, snapped.pt, snapped.kind));
+      }
+    } else if (mode === 'stamp' && stamp) {
+      if (stamp.placementMode === 'edge-pair') {
+        if (dragStart.current) {
+          const snapped = snapToEdge(raw.x, raw.y, constraints, lines, connections);
+          const ghost = {
+            type: stampType,
+            from: { edge: dragStart.current.edge, t: dragStart.current.t },
+            to:   { edge: snapped.edge, t: snapped.t },
+          };
+          blitToMain(ctx => {
+            ctx.save();
+            ctx.globalAlpha = 0.55;
+            stamp.render(ctx, ghost, SIZE);
+            ctx.restore();
+          });
+        } else {
+          const snapped = snapToEdge(raw.x, raw.y, constraints, lines, connections);
+          blitToMain(ctx => drawHoverSnap(ctx, snapped.pt, snapped.kind));
+        }
+      } else {
+        const x = Math.max(0.06, Math.min(0.94, raw.x));
+        const y = Math.max(0.06, Math.min(0.94, raw.y));
+        const error = validatePointStamp(x, y);
+        blitToMain(ctx => {
+          ctx.save();
+          ctx.globalAlpha = 0.55;
+          stamp.render(ctx, { type: stampType, x, y }, SIZE);
+          ctx.restore();
+          if (error) drawInvalidMark(ctx, x, y);
+        });
+      }
+    }
+  }
+
+  function handleMouseUp(e) {
+    const canvas = canvasRef.current;
+    if (!canvas || !dragStart.current) return;
+    const raw     = coordsFromEvent(e, canvas);
+    const snapped = snapToEdge(raw.x, raw.y, constraints, lines, connections);
+    const start   = dragStart.current;
     dragStart.current = null;
     setDragging(false);
-    // Clear preview; hover indicator will redraw on next mousemove
-    blitToMain();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
 
-  const handleMouseLeave = useCallback(() => {
+    if (mode === 'line') {
+      if (snapped.edge !== start.edge && !atLineLimit) {
+        setLines(prev => [...prev, {
+          from: { edge: start.edge,   t: start.t },
+          to:   { edge: snapped.edge, t: snapped.t },
+        }]);
+      }
+    } else if (mode === 'stamp' && stamp?.placementMode === 'edge-pair') {
+      const from = { edge: start.edge,   t: start.t };
+      const to   = { edge: snapped.edge, t: snapped.t };
+      const error = validateEdgePairStamp(from, to);
+      if (error) {
+        setNotice({ text: error, tone: 'warn' });
+      } else {
+        setMarkers(prev => [...prev, { type: stampType, from, to }]);
+      }
+    }
+    blitToMain();
+  }
+
+  function handleMouseLeave() {
     if (dragStart.current) {
       dragStart.current = null;
       setDragging(false);
     }
-    lastHover.current = null;
     blitToMain();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
 
-  // ── Fill tool handler ──────────────────────────────────────────────────────
-
-  const handleClick = useCallback((e) => {
-    if (mode !== 'fill') return;
+  function handleClick(e) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const pt = coordsFromEvent(e, canvas);
-    setRegions(prev => {
-      const idx = prev.findIndex(
-        r => Math.abs(r.seed.x - pt.x) < 0.04 && Math.abs(r.seed.y - pt.y) < 0.04
-      );
-      const entry = { seed: pt, type: fillType };
-      const next  = [...prev];
-      if (idx >= 0) next[idx] = entry; else next.push(entry);
-      return next;
-    });
-  }, [mode, fillType]);
+
+    if (mode === 'fill') {
+      setRegions(prev => {
+        const idx = prev.findIndex(
+          r => Math.abs(r.seed.x - pt.x) < 0.04 && Math.abs(r.seed.y - pt.y) < 0.04
+        );
+        const entry = { seed: pt, type: fillType };
+        const next  = [...prev];
+        if (idx >= 0) next[idx] = entry; else next.push(entry);
+        return next;
+      });
+    } else if (mode === 'stamp' && stamp?.placementMode === 'point') {
+      const x = Math.max(0.06, Math.min(0.94, pt.x));
+      const y = Math.max(0.06, Math.min(0.94, pt.y));
+      const error = validatePointStamp(x, y);
+      if (error) {
+        setNotice({ text: error, tone: 'warn' });
+      } else {
+        setMarkers(prev => [...prev, { type: stampType, x, y }]);
+      }
+    }
+  }
 
   // ── Undo / clear ───────────────────────────────────────────────────────────
 
-  const undoLast  = useCallback(() => {
-    if (mode === 'line') setLines(p => p.slice(0, -1));
-    else                  setRegions(p => p.slice(0, -1));
+  function undoLast() {
+    if (mode === 'line')       setLines(p => p.slice(0, -1));
+    else if (mode === 'fill')  setRegions(p => p.slice(0, -1));
+    else                       setMarkers(p => p.slice(0, -1));
     clearViolations();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }
 
-  const clearTile = useCallback(() => {
-    setLines([]);
-    setRegions([]);
+  // In stamp-only mode the terrain is read-only — Clear only removes stamps.
+  function clearTile() {
+    if (!stampOnly) {
+      setLines([]);
+      setRegions([]);
+    }
+    setMarkers([]);
     clearViolations();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
-  const handleSave = useCallback(() => {
+  // Terrain cards must paint the entire tile — no empty areas may remain.
+  // The sample canvas holds exact region colors (no lines, no markers).
+  function tileFullyPainted() {
+    const oc = sampleRef.current;
+    if (!oc) return true;
+    const [er, eg, eb] = hexToRgb(REGION_CONFIG.empty.color);
+    const { data } = oc.getContext('2d').getImageData(0, 0, SIZE, SIZE);
+    for (let i = 0; i < data.length; i += 16) {
+      if (data[i] === er && data[i + 1] === eg && data[i + 2] === eb) return false;
+    }
+    return true;
+  }
+
+  function handleSave() {
+    if (stampOnly) {
+      // Terrain untouched — keep the tile's existing edge segments.
+      onSave({ lines, regions, markers, edgeSegments: tile.edgeSegments });
+      return;
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (!isVoid && !tileFullyPainted()) {
+      setFillError(true);
+      return;
+    }
+    // Render without markers — edge segments and validation sample raw terrain
     renderTileToCanvas(canvas.getContext('2d'), { lines, regions }, SIZE);
     const vs = validateConstraints(canvas, constraints);
     if (vs.length > 0) {
@@ -282,13 +505,25 @@ export function TileEditor({ tile, constraints, allowedTypes, onSave, onCancel }
       blitToMain();
       return;
     }
-    onSave({ lines, regions, edgeSegments: computeEdgeSegments(canvas, lines) });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, regions, constraints, onSave]);
+    onSave({ lines, regions, markers, edgeSegments: computeEdgeSegments(canvas, lines) });
+  }
 
   // ── JSX ────────────────────────────────────────────────────────────────────
 
-  const isVoid = allowedTypes?.length === 0;
+  const hint = (() => {
+    if (mode === 'line') {
+      if (dragging)     return dragValid ? 'Release to place the line.' : 'Lines must end on a different edge.';
+      if (atLineLimit)  return 'Line limit reached — undo a line or switch tools.';
+      return 'Drag from one edge to another. Dots mark neighbor transitions (white) and your own line ends (amber).';
+    }
+    if (mode === 'fill') {
+      return `Click inside a region to paint it ${REGION_CONFIG[fillType]?.name ?? fillType}.`;
+    }
+    if (stamp?.placementMode === 'edge-pair') {
+      return `Drag from one edge to another to place a ${stamp.name}. Tan squares mark roads arriving from neighbor tiles.`;
+    }
+    return stamp ? `Click the map to place a ${stamp.name}.` : 'Select a stamp in the toolbar.';
+  })();
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -305,45 +540,80 @@ export function TileEditor({ tile, constraints, allowedTypes, onSave, onCancel }
         onClick={handleClick}
         style={{
           display: 'block',
-          cursor: mode === 'fill' ? 'cell' : 'crosshair',
+          cursor: mode === 'fill' ? 'cell' : mode === 'stamp' ? 'copy' : 'crosshair',
           border: '1px solid #334155',
           borderRadius: 4,
           userSelect: 'none',
         }}
       />
 
-      {/* Controls */}
+      {/* Toolbar — line tool, paint colors, stamps, and utilities in one row */}
       {!isVoid && (
-        <div className="flex flex-wrap gap-3 items-center justify-center">
+        <div className="flex flex-wrap gap-3 items-center justify-center max-w-lg">
 
-          {/* Mode toggle */}
-          <div className="flex rounded overflow-hidden border border-slate-600 text-xs">
-            {[['line', '╱ Line'], ['fill', '▣ Fill']].map(([m, label]) => (
-              <button key={m} onClick={() => setMode(m)}
-                className={`px-3 py-1.5 font-medium transition-colors ${
-                  mode === m
-                    ? 'bg-slate-500 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          {/* Line tool + paint colors — hidden when terrain is read-only */}
+          {!stampOnly && (
+            <>
+              <button onClick={() => { setMode('line'); setNotice(null); }}
+                title="Draw boundary lines between edges"
+                className={`px-3 py-1.5 text-xs font-medium rounded border transition-colors ${
+                  mode === 'line'
+                    ? 'bg-slate-500 text-white border-slate-400'
+                    : 'bg-slate-800 text-slate-400 border-slate-600 hover:bg-slate-700'
                 }`}
               >
-                {label}
+                ╱ Line
               </button>
-            ))}
-          </div>
 
-          {/* Region picker — only shown in fill mode */}
-          {mode === 'fill' && (
-            <div className="flex gap-1.5">
-              {allowedTypes.map(type => (
-                <button key={type} onClick={() => setFillType(type)}
-                  title={REGION_CONFIG[type].name}
-                  className={`w-6 h-6 rounded border-2 transition-all ${
-                    fillType === type ? 'border-white scale-110' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: REGION_CONFIG[type].color }}
-                />
-              ))}
-            </div>
+              <div className="flex gap-1.5 items-center">
+                {allowedTypes.map(type => (
+                  <button key={type}
+                    onClick={() => { setMode('fill'); setFillType(type); setNotice(null); }}
+                    title={`Paint ${REGION_CONFIG[type].name}`}
+                    className={`w-6 h-6 rounded border-2 transition-all ${
+                      mode === 'fill' && fillType === type
+                        ? 'border-white scale-110'
+                        : 'border-slate-600 hover:border-slate-400'
+                    }`}
+                    style={{ backgroundColor: REGION_CONFIG[type].color }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Stamps — clicking one selects the stamp tool */}
+          {hasStamps && (
+            <>
+              {!stampOnly && <div className="w-px h-5 bg-slate-700" />}
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {allowedMarkers.map(id => (
+                  <button key={id}
+                    onClick={() => { setMode('stamp'); setStampType(id); setNotice(null); }}
+                    className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                      mode === 'stamp' && stampType === id
+                        ? 'bg-slate-500 text-white border-slate-400'
+                        : 'bg-slate-800 text-slate-400 border-slate-600 hover:bg-slate-700'
+                    }`}
+                  >
+                    {STAMP_REGISTRY[id]?.name ?? id}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="w-px h-5 bg-slate-700" />
+
+          {/* Line budget */}
+          {!stampOnly && Number.isFinite(maxLines) && (
+            <span className={`px-2 py-1 text-xs rounded font-medium ${
+              atLineLimit
+                ? 'bg-amber-950/60 text-amber-400 border border-amber-800/60'
+                : 'bg-slate-800 text-slate-300 border border-slate-700'
+            }`}>
+              Lines {lines.length} / {maxLines}
+            </span>
           )}
 
           {/* Undo / Clear */}
@@ -363,11 +633,22 @@ export function TileEditor({ tile, constraints, allowedTypes, onSave, onCancel }
       )}
 
       {/* Contextual hint */}
-      <p className="text-xs text-slate-500 text-center max-w-sm">
-        {mode === 'line' && !dragging && 'Drag from one edge to a different edge to draw a boundary line.'}
-        {mode === 'line' && dragging  && 'Release on a different edge to place the line.'}
-        {mode === 'fill'              && 'Click inside a region to fill it. Pick a type above.'}
-      </p>
+      <p className="text-xs text-slate-500 text-center max-w-sm">{hint}</p>
+
+      {/* Placement notice */}
+      {notice && (
+        <div className="text-xs text-amber-400 text-center max-w-sm bg-amber-950/40 border border-amber-800/60 rounded px-3 py-2">
+          {notice.text}
+        </div>
+      )}
+
+      {/* Incomplete fill error */}
+      {fillError && (
+        <div className="text-xs text-red-400 text-center max-w-sm bg-red-950/40 border border-red-800/60 rounded px-3 py-2">
+          <span className="font-semibold">Unpainted area — </span>
+          the whole tile must be filled before saving. Paint every region.
+        </div>
+      )}
 
       {/* Constraint violation error */}
       {violations.length > 0 && (

@@ -6,6 +6,12 @@ export const MAP_CANVAS_SIZE   = GRID_COLS * TILE_DISPLAY_SIZE; // 480
 
 export const REGION_TYPES = ['water', 'land', 'forest', 'mountain'];
 
+// Shows the "Dev Tools" toggle in the page header. When toggled on, every
+// region color, every stamp, and an unlimited line budget are available in the
+// tile editor regardless of the drawn card. Set to false before making the
+// map public.
+export const SHOW_DEV_TOGGLE = true;
+
 // Colors chosen so that r+g+b > BORDER_THRESHOLD for all regions (see tileUtils)
 export const REGION_CONFIG = {
   empty:    { name: 'Empty',    color: '#505060' },

@@ -2,12 +2,25 @@
 import { useReducer, useCallback, useState, useEffect } from 'react';
 import { useGrid } from './useGrid.js';
 import { CARD_DECK } from './cards.js';
-import { REGION_CONFIG, GRID_COLS } from './config.js';
+import { REGION_CONFIG, REGION_TYPES, GRID_COLS, SHOW_DEV_TOGGLE } from './config.js';
+import { getMinRequiredLines } from './tileUtils.js';
+import { STAMP_REGISTRY } from './stamps.js';
+
+const ALL_STAMP_IDS = Object.keys(STAMP_REGISTRY);
 import { MapCanvas } from './MapCanvas.jsx';
 import { TileEditor } from './TileEditor.jsx';
 import { CardPanel } from './CardPanel.jsx';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// 'terrain' cards paint blank tiles; 'civilization' cards stamp drawn tiles;
+// 'void' clears a drawn tile.
+function cardKind(card) {
+  if (!card) return null;
+  if (card.allowedMarkers?.length > 0) return 'civilization';
+  if (card.allowedTypes.length === 0) return 'void';
+  return 'terrain';
+}
 
 function typesFromConstraints(constraints) {
   const types = new Set();
@@ -48,10 +61,11 @@ function deckReducer(state, action) {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function JerryMappingApp() {
-  const { grid, updateTile, resetGrid, getConstraints, getCandidateTiles } = useGrid();
+  const { grid, updateTile, resetGrid, getConstraints, getRoadConnections, getCandidateTiles } = useGrid();
   const [deckState, deckDispatch] = useReducer(deckReducer, deckInit);
   const [editingTile, setEditingTile] = useState(null);
   const [candidateTiles, setCandidateTiles] = useState([]);
+  const [devMode, setDevMode] = useState(false);
 
   const { currentCard, history } = deckState;
 
@@ -60,7 +74,8 @@ export default function JerryMappingApp() {
 
   useEffect(() => {
     if (currentCard) {
-      setCandidateTiles(getCandidateTiles(3));
+      const kind = cardKind(currentCard);
+      setCandidateTiles(getCandidateTiles(3, kind === 'terrain' ? 'empty' : 'populated'));
     } else {
       setCandidateTiles([]);
     }
@@ -76,19 +91,24 @@ export default function JerryMappingApp() {
     if (!currentCard) return;
     const isCandidate = candidateTiles.some(t => t.col === col && t.row === row);
     if (!isCandidate) return;
-    setEditingTile({ col, row });
-  }, [currentCard, candidateTiles]);
+    // Roll the line budget once per tile-open, but never below what the
+    // neighbor constraints require to keep edges connectable.
+    const [lo, hi] = currentCard.lineRange ?? [0, 99];
+    const roll = lo + Math.floor(Math.random() * (hi - lo + 1));
+    const maxLines = Math.max(roll, getMinRequiredLines(getConstraints(col, row)));
+    setEditingTile({ col, row, maxLines });
+  }, [currentCard, candidateTiles, getConstraints]);
 
   const handleSaveTile = useCallback((col, row, tileData) => {
-    const isVoid = currentCard?.allowedTypes.length === 0;
+    const isVoid = !devMode && cardKind(currentCard) === 'void';
     if (isVoid) {
-      updateTile(col, row, { lines: [], regions: [], edgeSegments: null });
+      updateTile(col, row, { lines: [], regions: [], markers: [], edgeSegments: null });
     } else {
       updateTile(col, row, tileData);
     }
     setEditingTile(null);
     deckDispatch({ type: 'DISCARD' });
-  }, [currentCard, updateTile]);
+  }, [currentCard, updateTile, devMode]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingTile(null);
@@ -108,12 +128,26 @@ export default function JerryMappingApp() {
               Draw a card. Select a tile. Draw the world within its constraints.
             </p>
           </div>
-          <button
-            onClick={handleReset}
-            className="text-xs text-slate-500 hover:text-slate-300 px-3 py-1.5 rounded border border-slate-700 hover:border-slate-500 transition-colors"
-          >
-            Reset Map
-          </button>
+          <div className="flex gap-2">
+            {SHOW_DEV_TOGGLE && (
+              <button
+                onClick={() => setDevMode(d => !d)}
+                className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                  devMode
+                    ? 'text-amber-400 border-amber-700 bg-amber-950/40 hover:border-amber-500'
+                    : 'text-slate-500 border-slate-700 hover:text-slate-300 hover:border-slate-500'
+                }`}
+              >
+                Dev Tools {devMode ? 'On' : 'Off'}
+              </button>
+            )}
+            <button
+              onClick={handleReset}
+              className="text-xs text-slate-500 hover:text-slate-300 px-3 py-1.5 rounded border border-slate-700 hover:border-slate-500 transition-colors"
+            >
+              Reset Map
+            </button>
+          </div>
         </div>
 
         {isEditing ? (
@@ -132,15 +166,23 @@ export default function JerryMappingApp() {
             </div>
             {(() => {
               const constraints = getConstraints(editingTile.col, editingTile.row);
+              const kind = cardKind(currentCard);
+              const variant = devMode ? 'terrain' : kind === 'civilization' ? 'stamps' : kind ?? 'terrain';
               const cardTypes = currentCard?.allowedTypes ?? [];
-              const effectiveAllowedTypes = cardTypes.length === 0
-                ? []
-                : [...new Set([...cardTypes, ...typesFromConstraints(constraints)])];
+              const effectiveAllowedTypes = devMode
+                ? [...REGION_TYPES]
+                : cardTypes.length === 0
+                  ? []
+                  : [...new Set([...cardTypes, ...typesFromConstraints(constraints)])];
               return (
                 <TileEditor
                   tile={grid[editingTile.row * GRID_COLS + editingTile.col]}
+                  variant={variant}
                   constraints={constraints}
+                  connections={getRoadConnections(editingTile.col, editingTile.row)}
                   allowedTypes={effectiveAllowedTypes}
+                  allowedMarkers={devMode ? ALL_STAMP_IDS : currentCard?.allowedMarkers ?? []}
+                  maxLines={devMode || variant !== 'terrain' ? Infinity : editingTile.maxLines}
                   onSave={(tileData) => handleSaveTile(editingTile.col, editingTile.row, tileData)}
                   onCancel={handleCancelEdit}
                 />
