@@ -1,5 +1,5 @@
 import Image from "next/image"
-import Nasa from "../components/nasa.png"
+import JerryPic from "../components/jerrymapping.png"
 import MapPic from "../components/map.png"
 import AntPic from "../components/ants.png"
 import PhilPic from "../components/phil.png"
@@ -23,12 +23,12 @@ export default function funstuff() {
           justify-center overflow-hidden relative">
           <Image src={MapPic} alt="Map Image" className="w-full h-auto" />
         </a>
-        <a href="./nasaphoto" className="bg-[#1D2125]
+        <a href="./jerrymapping" className="bg-[#1D2125]
           rounded-xl
           h-[200px]
           flex items-center
           justify-center overflow-hidden">
-          <Image src={Nasa} alt="Nasa Images" objectFit="cover" />
+          <Image src={JerryPic} alt="Jerry Mapping" className="w-full h-full object-cover" />
         </a>
         <a href="https://journal.nyphilosophy.org/" target="_blank" rel="noopener noreferrer" className="bg-[#1D2125]
           rounded-xl
@@ -36,7 +36,7 @@ export default function funstuff() {
           flex items-center
           justify-center overflow-hidden">
           
-          <Image src={PhilPic} alt="Nasa Images" objectFit="cover" />
+          <Image src={PhilPic} alt="Philosophy Journal" objectFit="cover" />
         </a>
       </div>
     </main >
