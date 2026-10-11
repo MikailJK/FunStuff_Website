@@ -2,7 +2,7 @@
 import Image from "next/image"
 import AntPic from "./components/ants.png"
 import MapPic from "./components/map.png"
-import Nasa from "./components/nasa.png"
+import JerryPic from "./components/jerrymapping.png"
 import PhilPic from "./components/phil.png"
 
 export default function Home() {
@@ -109,9 +109,9 @@ export default function Home() {
               <Image src={MapPic} alt="Where in the World" className="w-full h-auto" />
               <span className="funstuff-label">Where in the World?</span>
             </a>
-            <a href="/nasaphoto" className="funstuff-card">
-              <Image src={Nasa} alt="NASA Photo" objectFit="cover" />
-              <span className="funstuff-label">NASA Photo of the Day</span>
+            <a href="/jerrymapping" className="funstuff-card">
+              <Image src={JerryPic} alt="Jerry Mapping" className="w-full h-auto" />
+              <span className="funstuff-label">Jerry Mapping</span>
             </a>
             <a href="https://journal.nyphilosophy.org/" target="_blank" rel="noopener noreferrer" className="funstuff-card">
               <Image src={PhilPic} alt="Philosophy Journal" objectFit="cover" />

@@ -1,4 +1,4 @@
-import JerryMappingApp from '../components/JerryMapping/JerryMappingApp.jsx';
+import JerryMappingApp from '../components/JerryMapping/ui/JerryMappingApp.jsx';
 
 export default function JerryMappingPage() {
   return (

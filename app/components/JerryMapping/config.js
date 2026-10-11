@@ -1,26 +1,45 @@
-export const GRID_COLS = 8;
-export const GRID_ROWS = 8;
-export const TILE_DISPLAY_SIZE = 60;                         // px per tile on the map
-export const TILE_EDITOR_SIZE  = 400;                        // px in the zoomed editor
-export const MAP_CANVAS_SIZE   = GRID_COLS * TILE_DISPLAY_SIZE; // 480
+// ─── Tile geometry ────────────────────────────────────────────────────────────
+// Every tile is a TILE_CELLS × TILE_CELLS grid of terrain cells. All game logic
+// works in cell units; rendering converts to pixels.
+export const TILE_CELLS = 32;
+export const CELL_COUNT = TILE_CELLS * TILE_CELLS;
 
-export const REGION_TYPES = ['water', 'land', 'forest', 'mountain'];
+// Depth (in cells) of the locked border copied from a drawn neighbor.
+export const SEAM_DEPTH = 2;
 
-// Shows the "Dev Tools" toggle in the page header. When toggled on, every
-// region color, every stamp, and an unlimited line budget are available in the
-// tile editor regardless of the drawn card. Set to false before making the
-// map public.
-export const SHOW_DEV_TOGGLE = true;
+// ─── Rendering ────────────────────────────────────────────────────────────────
+export const MAP_TILE_PX     = 96;    // tile size on the map at zoom 1
+export const EDITOR_MAX_PX   = 480;   // largest editor tile size
+export const EXPORT_TILE_PX  = 160;   // per-tile resolution of PNG export
 
-// Colors chosen so that r+g+b > BORDER_THRESHOLD for all regions (see tileUtils)
-export const REGION_CONFIG = {
-  empty:    { name: 'Empty',    color: '#505060' },
-  water:    { name: 'Water',    color: '#1a7cc0' },
-  land:     { name: 'Land',     color: '#4a8835' },
-  forest:   { name: 'Forest',   color: '#0a4004' },
-  mountain: { name: 'Mountain', color: '#8a9090' },
+// ─── Void ─────────────────────────────────────────────────────────────────────
+// The void spreads every `tickEvery` turns. Each tick runs `passes` rounds of
+// growth; a bordering cell is consumed with probability `chance` per round.
+export const VOID_CONFIG = {
+  tickEvery: 4,
+  passes:    2,
+  chance:    0.5,
+  seedRadius: 4,
 };
 
-// Stroke line color — must be dark (r+g+b << BORDER_THRESHOLD) so flood fill treats it as a wall
-export const STROKE_COLOR     = '#040408';
-export const STROKE_WIDTH_PX  = 4;           // px in editor
+// ─── Pacing ───────────────────────────────────────────────────────────────────
+// How many turns one player may start per time window. Single-player is
+// unlimited; the collaborative policy is what an online version would enforce
+// server-side (it can be simulated locally from Dev Tools).
+export const PACING_POLICIES = {
+  unlimited:     { turnsPerWindow: Infinity, windowHours: 24 },
+  collaborative: { turnsPerWindow: 3,        windowHours: 24 },
+  devSimulated:  { turnsPerWindow: 3,        windowHours: 0.05 },  // 3 turns / 3 min
+};
+
+// How long a claimed tile stays reserved for the player who drew the card.
+export const CLAIM_MINUTES = 30;
+
+// Shows the "Dev Tools" toggle in the page header. When on, the editor offers
+// every terrain and tool without limits, and the side panel can pick specific
+// cards, force void ticks and simulate pacing. Set to false before going public.
+export const SHOW_DEV_TOGGLE = true;
+
+export const STORAGE_KEY = 'jerrymapping:v2';
+export const SAVE_FORMAT = 'jerrymap';
+export const SAVE_VERSION = 2;
