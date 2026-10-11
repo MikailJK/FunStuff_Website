@@ -15,8 +15,7 @@ export default function Home() {
           <p className="hero-eyebrow">Software Engineer &nbsp;·&nbsp; New York City</p>
           <p className="hero-name">Mikail Krochta</p>
           <p className="hero-desc">
-            I build <em>backend systems, distributed computing infrastructure, and applied machine learning</em> pipelines.
-            I pick things up quickly and go deep, whether that&apos;s mastering a new codebase or becoming a go-to resource on a complex domain.
+            I build backend systems that handle complex rules at scale, with a background in data pipelines and applied machine learning.
           </p>
           <span className="scroll-hint">↓ scroll</span>
         </section>
@@ -29,18 +28,18 @@ export default function Home() {
 
           <div className="bio-grid">
             <div className="bio-text">
-              I&apos;m a software engineer with a background spanning <em>backend systems, distributed computing, and applied machine learning</em>. I thrive in environments where there&apos;s a lot to learn, I pick things up quickly and go deep, whether that&apos;s mastering a new codebase or becoming a go-to resource for the team on a complex domain.<br /><br />
-              Outside of software, I volunteer as an associate editor for a community-focused philosophy journal. I&apos;m drawn to independent study across mathematics, philosophy, and computer science, and bring that same curiosity into my technical work.
+              I&apos;m a software engineer with a background in backend systems, large-scale data processing, and applied machine learning. I learn quickly and like to go deep. In my current role, I became the go-to expert on a pricing rules engine that handles millions of requests an hour, and I&apos;m now helping build an LLM assistant that makes it easier for others to understand.<br /><br />
+              Outside of software, I volunteer as an associate editor for the New York Journal of Philosophy. I studied mathematics alongside computer science and still spend a lot of my free time on independent study in both, along with philosophy. That curiosity is a big part of how I approach engineering.
             </div>
 
             <div className="right-col">
               <div className="stat-row">
                 <div className="stat-label">Currently</div>
-                <div className="stat-value">Software Engineer, enterprise-scale backend APIs and qualification systems</div>
+                <div className="stat-value">Backend engineer on a Java rules engine serving millions of requests per hour</div>
               </div>
               <div className="stat-row">
                 <div className="stat-label">Background</div>
-                <div className="stat-value">BS Computer Science, NC State — 4.0 major GPA</div>
+                <div className="stat-value">BS Computer Science, Minor in Mathematics, NC State, 4.0 major GPA</div>
               </div>
               <div className="stat-row">
                 <div className="stat-label">Editorial</div>
@@ -59,18 +58,16 @@ export default function Home() {
             <p className="section-label">Technical skills</p>
             <div className="skills-grid">
               <span className="skill-tag featured">Java</span>
-              <span className="skill-tag featured">Spring Boot</span>
               <span className="skill-tag featured">Python</span>
-              <span className="skill-tag featured">Apache Spark</span>
               <span className="skill-tag featured">SQL</span>
-              <span className="skill-tag featured">Maven</span>
+              <span className="skill-tag featured">DB2</span>
+              <span className="skill-tag">Apache Spark</span>
+              <span className="skill-tag">pandas</span>
+              <span className="skill-tag">Databricks</span>
+              <span className="skill-tag">LangGraph</span>
               <span className="skill-tag">JavaScript</span>
               <span className="skill-tag">React</span>
-              <span className="skill-tag">C++</span>
-              <span className="skill-tag">C#</span>
-              <span className="skill-tag">Databricks</span>
               <span className="skill-tag">Git</span>
-              <span className="skill-tag">NLP / LLM tooling</span>
             </div>
           </div>
 
@@ -81,7 +78,7 @@ export default function Home() {
             <div className="outside-grid">
               <div className="outside-item">
                 <div className="outside-title">Board games</div>
-                <div className="outside-desc">A fan of strategy games and the occasional ruthless negotiation</div>
+                <div className="outside-desc">A fan of Strategy, Euro-Style, and Deck Building games</div>
               </div>
               <div className="outside-item">
                 <div className="outside-title">Speedcubing</div>
@@ -89,7 +86,7 @@ export default function Home() {
               </div>
               <div className="outside-item">
                 <div className="outside-title">Reading</div>
-                <div className="outside-desc">Mostly philosophy and computer science, with whatever else catches my interest</div>
+                <div className="outside-desc">Mostly SciFi, Philosophy, and Mathmatics, with whatever else catches my interest</div>
               </div>
             </div>
           </div>
