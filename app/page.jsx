@@ -4,6 +4,8 @@ import AntPic from "./components/ants.png"
 import MapPic from "./components/map.png"
 import JerryPic from "./components/jerrymapping.png"
 import PhilPic from "./components/phil.png"
+import SudokuPic from "./components/sudoku_screenshot.png"
+import BarnkyPic from "./components/barnky_deck_screenshot.png"
 
 export default function Home() {
   return (
@@ -116,6 +118,14 @@ export default function Home() {
             <a href="https://journal.nyphilosophy.org/" target="_blank" rel="noopener noreferrer" className="funstuff-card">
               <Image src={PhilPic} alt="Philosophy Journal" objectFit="cover" />
               <span className="funstuff-label">NY Journal of Philosophy</span>
+            </a>
+            <a href="/sudoku" className="funstuff-card">
+              <Image src={SudokuPic} alt="Sudoku & Killer Sudoku" sizes="(max-width: 640px) 100vw, 50vw" className="w-full h-full object-cover" />
+              <span className="funstuff-label">Sudoku &amp; Killer Sudoku</span>
+            </a>
+            <a href="https://www.barnkydeck.com/" target="_blank" rel="noopener noreferrer" className="funstuff-card">
+              <Image src={BarnkyPic} alt="Barnky Deck" sizes="(max-width: 640px) 100vw, 50vw" className="w-full h-full object-cover object-left-top" />
+              <span className="funstuff-label">Barnky Deck</span>
             </a>
           </div>
         </section>
