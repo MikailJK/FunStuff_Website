@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { KINDS, DIFFICULTIES, CUSTOM, puzzlesFor, fromCustom } from '../puzzles.js';
-import { createBoard, placeAnswer, toggleMark, eraseCell, isWrong, isSolved, cageIndex } from '../engine/board.js';
+import { createBoard, placeAnswer, toggleMark, eraseCell, isWrong, isSolved, cageIndex, boxOf } from '../engine/board.js';
 import { encodeEntry, decodeEntry, hasProgress, entryStatus } from '../engine/serialize.js';
 import { loadStore, saveStore, loadCustom } from '../storage.js';
 import { Board } from './Board.jsx';
@@ -20,6 +20,7 @@ const MOVES = {
 };
 
 const cx = (...names) => names.filter(Boolean).join(' ');
+const noop = () => {};
 
 function Settings({ mode, onChange }) {
   const [open, setOpen] = useState(false);
@@ -73,31 +74,87 @@ function Settings({ mode, onChange }) {
 const SOLVED_MSG = { text: 'Solved. Nicely done!', good: true };
 const UNDO_LIMIT = 500;
 
+const BOX_CELLS = Array.from({ length: 9 }, (_, b) =>
+  Array.from({ length: 9 }, (_, k) => (((b / 3) | 0) * 3 + ((k / 3) | 0)) * 9 + (b % 3) * 3 + (k % 3)));
+
+// A box counts as done once it holds 1–9 with no repeats. With checking on,
+// every answer in it must also be right; with it off, nothing is given away.
+function boxDone(values, b, solution, checked) {
+  const cells = BOX_CELLS[b];
+  if (new Set(cells.map(i => values[i]).filter(Boolean)).size !== 9) return false;
+  return !checked || cells.every(i => values[i] === Number(solution[i]));
+}
+
+// Shown over the board the moment the puzzle is solved. Closes on ×, Esc, or a
+// click anywhere outside it.
+function SolvedPopup({ onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    ref.current?.querySelector('button')?.focus({ preventScroll: true });
+    const away = e => { if (!ref.current?.contains(e.target)) onClose(); };
+    const esc = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+  }, [onClose]);
+
+  return (
+    <div className={s.solvedScrim}>
+      <div className={s.solvedCard} ref={ref} role="dialog" aria-label="Puzzle solved">
+        <button type="button" className={cx(s.closeBtn, s.solvedClose)} onClick={onClose} aria-label="Close">×</button>
+        <p className={s.solvedTitle}>Solved</p>
+        <p className={s.solvedText}>Nicely done!</p>
+      </div>
+    </div>
+  );
+}
+
 function Game({ puzzle, entry, onProgress, mode, pencil, setPencil, label, active, onRestart }) {
   // `entry` is only read on mount; the parent remounts Game per puzzle/restart.
   const [init] = useState(() => decodeEntry(puzzle, entry));
   const [board, setBoard] = useState(() => init?.board ?? createBoard(puzzle));
   const [selected, setSelected] = useState(null);
   const [mistakes, setMistakes] = useState(init?.mistakes ?? 0);
+  // `solved` = ever solved (kept through a restart); `locked` = this board is
+  // finished, so it takes no more changes.
   const [solved, setSolved] = useState(init?.solved ?? false);
-  const [message, setMessage] = useState(() => (init?.solved && isSolved(init.board, puzzle.solution) ? SOLVED_MSG : null));
+  const [locked, setLocked] = useState(() => !!init?.solved && isSolved(init.board, puzzle.solution));
+  const [message, setMessage] = useState(() => (locked ? SOLVED_MSG : null));
+  const [popup, setPopup] = useState(false);
+  const [pulses, setPulses] = useState([]);
+  const pulseKey = useRef(0);
 
   const cageOf = useMemo(() => cageIndex(puzzle.cages), [puzzle]);
 
-  // Switching modes clears any stale "check" result.
+  // Switching modes clears any stale "check" result (but not "Solved").
   // (Compares against the last mode rather than skipping the first run, which
   // React's dev-mode double mount would defeat.)
   const lastMode = useRef(mode);
   useEffect(() => {
     if (lastMode.current === mode) return;
     lastMode.current = mode;
-    setMessage(null);
+    setMessage(m => (m === SOLVED_MSG ? m : null));
   }, [mode]);
 
   // Save after every change.
   useEffect(() => { onProgress(puzzle, board, { mistakes, solved }); }, [onProgress, puzzle, board, mistakes, solved]);
 
-  const markSolved = useCallback(() => { setSolved(true); setMessage(SOLVED_MSG); }, []);
+  const markSolved = useCallback(() => {
+    setSolved(true);
+    setLocked(true);
+    setSelected(null);
+    setMessage(SOLVED_MSG);
+    setPopup(true);
+  }, []);
+  const closePopup = useCallback(() => setPopup(false), []);
+  const endPulse = useCallback(key => setPulses(ps => ps.filter(p => p.key !== key)), []);
+
+  // How many of each digit are on the board, to hide the pad keys that are used up.
+  const counts = useMemo(() => {
+    const out = new Array(10).fill(0);
+    for (const v of board.values) out[v]++;
+    return out;
+  }, [board]);
 
   // Undo history for this session: previous boards plus the cell each change
   // touched. Undo restores the board only; mistakes and "solved" stay counted.
@@ -112,15 +169,15 @@ function Game({ puzzle, entry, onProgress, mode, pencil, setPencil, label, activ
 
   const undo = useCallback(() => {
     const last = history[history.length - 1];
-    if (!last) return;
+    if (!last || locked) return;
     setHistory(history.slice(0, -1));
     setBoard(last.board);
     setSelected(last.cell);
     setMessage(null);
-  }, [history]);
+  }, [history, locked]);
 
   const input = useCallback((d, asMark = pencil) => {
-    if (selected == null || board.givens[selected]) return;
+    if (locked || selected == null || board.givens[selected]) return;
     if (asMark) {
       commit(toggleMark(board, selected, d), selected);
       return;
@@ -131,16 +188,20 @@ function Game({ puzzle, entry, onProgress, mode, pencil, setPencil, label, activ
     // In auto-check mode a known-wrong answer leaves every pencil mark alone.
     const next = placeAnswer(board, selected, d, cage, { keepMarks: mode === 'auto' && wrong });
     if (!commit(next, selected)) return;
+    const b = boxOf(selected);
+    if (!boxDone(board.values, b, puzzle.solution, mode === 'auto') && boxDone(next.values, b, puzzle.solution, mode === 'auto')) {
+      setPulses(ps => [...ps, { box: b, key: ++pulseKey.current }]);
+    }
     if (mode === 'auto') {
       if (wrong) setMistakes(m => m + 1);
       if (isSolved(next, puzzle.solution)) markSolved();
     }
-  }, [board, selected, pencil, mode, puzzle, cageOf, commit, markSolved]);
+  }, [board, selected, pencil, mode, puzzle, cageOf, commit, markSolved, locked]);
 
   const erase = useCallback(() => {
-    if (selected == null) return;
+    if (locked || selected == null) return;
     commit(eraseCell(board, selected), selected);
-  }, [board, selected, commit]);
+  }, [board, selected, commit, locked]);
 
   const check = () => {
     if (isSolved(board, puzzle.solution)) return markSolved();
@@ -175,6 +236,7 @@ function Game({ puzzle, entry, onProgress, mode, pencil, setPencil, label, activ
         erase();
         if (selected == null) return;
       } else if (move) {
+        if (locked) return;
         const [dr, dc] = move;
         setSelected(sel => sel == null ? 40 : ((((sel / 9) | 0) + dr + 9) % 9) * 9 + (sel % 9 + dc + 9) % 9);
       } else if (e.key === ' ') {
@@ -190,7 +252,7 @@ function Game({ puzzle, entry, onProgress, mode, pencil, setPencil, label, activ
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, input, erase, undo, pencil, setPencil, selected]);
+  }, [active, input, erase, undo, pencil, setPencil, selected, locked]);
 
   const wrongCells = useMemo(() => {
     const out = new Set();
@@ -210,43 +272,56 @@ function Game({ puzzle, entry, onProgress, mode, pencil, setPencil, label, activ
         )}
       </div>
 
-      <Board
-        board={board}
-        puzzle={puzzle}
-        cageOf={cageOf}
-        selected={selected}
-        wrongCells={wrongCells}
-        onSelect={setSelected}
-      />
-
-      <div className={s.pad}>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
-          <button
-            key={d}
-            type="button"
-            className={cx(s.padBtn, pencil && s.padPencil)}
-            onClick={() => input(d)}
-            aria-label={pencil ? `Pencil mark ${d}` : `Enter ${d}`}
-          >
-            {d}
-          </button>
-        ))}
+      <div className={s.boardWrap}>
+        <Board
+          board={board}
+          puzzle={puzzle}
+          cageOf={cageOf}
+          selected={selected}
+          wrongCells={wrongCells}
+          onSelect={locked ? noop : setSelected}
+          pulses={pulses}
+          onPulseEnd={endPulse}
+          locked={locked}
+        />
+        {popup && <SolvedPopup onClose={closePopup} />}
       </div>
 
-      <div className={s.controls}>
+      <div className={s.pad}>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => {
+          // In answer mode a digit with all nine placed leaves the pad (its slot
+          // stays, so the other keys don't move). Pencil mode keeps every key.
+          const used = !pencil && counts[d] >= 9;
+          return (
+            <button
+              key={d}
+              type="button"
+              className={cx(s.padBtn, pencil && s.padPencil, used && s.padUsed)}
+              onClick={() => input(d)}
+              disabled={used || locked}
+              aria-hidden={used || undefined}
+              aria-label={pencil ? `Pencil mark ${d}` : `Enter ${d}`}
+            >
+              {d}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className={cx(s.controls, s.playControls)}>
         <Segmented
           label="Input mode"
           options={[{ id: 'answer', label: 'Answer' }, { id: 'pencil', label: 'Pencil' }]}
           value={pencil ? 'pencil' : 'answer'}
           onChange={v => setPencil(v === 'pencil')}
         />
-        <button type="button" className={s.btn} onClick={undo} disabled={!history.length} title="Undo (Esc or Ctrl+Z)">Undo</button>
-        <button type="button" className={s.btn} onClick={erase}>Erase</button>
+        <button type="button" className={s.btn} onClick={undo} disabled={locked || !history.length} title="Undo (Esc or Ctrl+Z)">Undo</button>
+        <button type="button" className={s.btn} onClick={erase} disabled={locked}>Erase</button>
         <button
           type="button"
           className={cx(s.btn, s.btnPrimary)}
           onClick={check}
-          disabled={mode === 'auto'}
+          disabled={mode === 'auto' || locked}
           title={mode === 'auto' ? 'Answers are checked as you place them' : undefined}
         >
           {mode === 'auto' ? 'Checking as you go' : 'Check answer'}
