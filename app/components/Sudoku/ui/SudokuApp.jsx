@@ -351,7 +351,7 @@ export default function SudokuApp({ puzzles }) {
   const [custom, setCustom] = useState([]);
   const [store, setStore] = useState(null); // null until read from the browser
   const [picking, setPicking] = useState(true);
-  const [mode, setMode] = useState('free');
+  const [mode, setMode] = useState('auto'); // check as you go, unless the player picked otherwise
   const [pencil, setPencil] = useState(false);
   const [restarts, setRestarts] = useState(0);
 
