@@ -117,6 +117,16 @@ export default function Home() {
               <Image src={PhilPic} alt="Philosophy Journal" objectFit="cover" />
               <span className="funstuff-label">NY Journal of Philosophy</span>
             </a>
+            <a href="/sudoku" className="funstuff-card">
+              {/* TODO: replace with a screenshot */}
+              <span className="funstuff-placeholder">Sudoku</span>
+              <span className="funstuff-label">Sudoku &amp; Killer Sudoku</span>
+            </a>
+            <a href="https://www.barnkydeck.com/" target="_blank" rel="noopener noreferrer" className="funstuff-card">
+              {/* TODO: replace with an image */}
+              <span className="funstuff-placeholder">Barnky Deck</span>
+              <span className="funstuff-label">Barnky Deck</span>
+            </a>
           </div>
         </section>
 

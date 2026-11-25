@@ -235,6 +235,14 @@ html {
   backdrop-filter: blur(4px);
 }
 
+/* Stand-in for a card image until one exists. */
+.funstuff-placeholder {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.75rem;
+  color: #5a636d;
+  padding-bottom: 1.5rem;
+}
+
 
 
 /* base styles */

@@ -12,6 +12,7 @@
   "dependencies": {
     "@react-three/drei": "^9.105.1",
     "@react-three/fiber": "^8.16.1",
+    "@supabase/supabase-js": "^2.119.2",
     "dayjs": "^1.11.10",
     "flask": "^0.2.10",
     "googleapis": "^134.0.0",

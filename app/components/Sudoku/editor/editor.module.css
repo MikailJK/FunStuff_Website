@@ -1,0 +1,337 @@
+/* Editor-specific styles. Shared pieces (board, cells, buttons, dialog) come
+   from ../ui/sudoku.module.css. Colour variables are inherited from .root. */
+
+.toolbar {
+  width: 100%;
+  max-width: 30rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.toolbarRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.hintText {
+  width: 100%;
+  max-width: 30rem;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ── Board ── */
+.board {
+  position: relative;
+  touch-action: none;
+}
+
+.cell { cursor: pointer; }
+
+.uncaged {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.025) 0 4px, transparent 4px 8px);
+}
+
+/* Cell states. Translucent so a background photo shows through. */
+.inCage { background-color: rgba(143, 184, 222, 0.12); }
+.selected { background-color: rgba(143, 184, 222, 0.24); }
+.drawing {
+  background-color: rgba(127, 192, 255, 0.35);
+  box-shadow: inset 0 0 0 2px rgba(127, 192, 255, 0.85);
+}
+
+.error { color: var(--wrong); }
+.error:not(.drawing) { background-color: rgba(240, 122, 122, 0.14); }
+
+/* With a photo underneath, unhighlighted cells are see-through. */
+.withPhoto .cell:not(.inCage, .selected, .drawing, .error) { background-color: transparent; }
+.withPhoto .uncaged { background-image: none; }
+
+/* Cage outlines: solid and bright (the player uses faint dashes), with a dark
+   halo so they stay clear over the light lines of a photo. */
+.board .cageLine {
+  z-index: 2;
+  border-style: solid;
+  border-color: #7fc0ff;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+
+.board .cageLineSelected { border-color: #ffd27a; }
+
+/* Cage totals sit in the middle of the cage, as a chip readable over a photo. */
+.cageTotal {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 1.6em;
+  padding: 0.15em 0.35em;
+  border-radius: 999px;
+  font-size: 3.1cqi;
+  line-height: 1.1;
+  text-align: center;
+  color: var(--text);
+  background: rgba(16, 18, 20, 0.85);
+  border: 1px solid rgba(143, 184, 222, 0.35);
+  pointer-events: none;
+}
+
+.totalMissing { color: var(--wrong); border-color: rgba(240, 122, 122, 0.5); }
+.totalSelected { border-color: var(--accent); }
+
+.hint {
+  position: absolute;
+  right: 12%;
+  bottom: 12%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e0b45c;
+  pointer-events: none;
+}
+
+/* Background photo, beneath the cells. Inverted so a white page sits
+   comfortably on the dark board, with its ink showing light. */
+.photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: invert(1) grayscale(1);
+  pointer-events: none;
+}
+
+.photoControls {
+  width: 100%;
+  max-width: 30rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.photoControls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.photoControls input[type='range'] { width: 7rem; accent-color: var(--accent); }
+
+/* ── Panels ── */
+.cagePanel {
+  width: 100%;
+  max-width: 30rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 13px;
+  color: #b8bec6;
+}
+
+.sumField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sumField input,
+.nameInput {
+  background: #15181b;
+  border: 1px solid var(--thin);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 6px 8px;
+}
+
+.sumField input { width: 4.5rem; }
+.sumField input:focus,
+.nameInput:focus { outline: none; border-color: var(--box); }
+
+.panel {
+  width: 100%;
+  max-width: 30rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--thin);
+  border-radius: 8px;
+}
+
+.issues {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 12.5px;
+  color: #c9a3a3;
+  line-height: 1.45;
+}
+
+.issues li::before { content: '· '; color: var(--wrong); }
+.issues .more { color: var(--muted); }
+.issues .more::before { content: ''; }
+
+.status {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.status_good { color: #8fd19e; }
+.status_warn { color: #e0b45c; }
+.status_bad { color: var(--wrong); }
+
+.saveRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.nameInput { flex: 1 1 10rem; min-width: 0; }
+
+.publishRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding-top: 0.6rem;
+  border-top: 1px solid #1e2227;
+}
+
+.publishLabel { font-size: 12px; color: var(--muted); }
+
+.select {
+  background: #15181b;
+  border: 1px solid var(--thin);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 6px 8px;
+}
+
+.select:focus { outline: none; border-color: var(--box); }
+
+.records {
+  display: flex;
+  flex-direction: column;
+}
+
+.record {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.45rem 0;
+  font-size: 13px;
+  border-top: 1px solid #1e2227;
+}
+
+.record:first-child { border-top: none; }
+.recordActive .recordName { color: var(--accent); }
+
+.recordName {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recordKind {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 0.25rem;
+}
+
+/* ── Import dialog ── */
+.importDialog { max-width: 30rem; }
+
+.dropZone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2.25rem 1rem;
+  border: 1px dashed var(--box);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dropZone:hover,
+.dropZoneOver { background: #1e2227; border-color: var(--accent); }
+
+.fileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dropTitle { font-size: 14px; color: var(--text); }
+.dropHint { font-size: 12px; color: var(--muted); }
+
+.viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #0c0d0f;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.viewport:active { cursor: grabbing; }
+
+.alignImage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.template {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid rgba(143, 184, 222, 0.9);
+  box-shadow: 0 0 0 9999px rgba(8, 9, 11, 0.55);
+}
+
+.tplThin { stroke: rgba(143, 184, 222, 0.45); stroke-width: 1; }
+.tplThick { stroke: rgba(143, 184, 222, 0.85); stroke-width: 2; }
+
+.sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.slider span { width: 3.5rem; }
+.slider input { flex: 1; accent-color: var(--accent); }
+
+.importError { font-size: 13px; color: var(--wrong); }
