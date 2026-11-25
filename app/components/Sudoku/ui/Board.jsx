@@ -82,7 +82,12 @@ const Cell = memo(function Cell({
   );
 });
 
-export function Board({ board, puzzle, cageOf, selected, wrongCells, onSelect }) {
+/**
+ * @param {{ box: number, key: number }[]} [pulses]  boxes to glow once (a new key replays it)
+ * @param {(key: number) => void} [onPulseEnd]
+ * @param {boolean} [locked]  solved: cells can't be selected
+ */
+export function Board({ board, puzzle, cageOf, selected, wrongCells, onSelect, pulses = [], onPulseEnd, locked }) {
   const killer = !!puzzle.cages;
   const selValue = selected != null ? board.values[selected] : 0;
 
@@ -97,7 +102,16 @@ export function Board({ board, puzzle, cageOf, selected, wrongCells, onSelect })
   );
 
   return (
-    <div className={s.board} role="grid" aria-label="Sudoku board">
+    <div className={locked ? `${s.board} ${s.locked}` : s.board} role="grid" aria-label="Sudoku board">
+      {pulses.map(p => (
+        <span
+          key={p.key}
+          className={s.boxPulse}
+          style={{ gridRow: `${((p.box / 3) | 0) * 3 + 1} / span 3`, gridColumn: `${(p.box % 3) * 3 + 1} / span 3` }}
+          onAnimationEnd={() => onPulseEnd?.(p.key)}
+          aria-hidden="true"
+        />
+      ))}
       {board.values.map((value, i) => {
         const line = selected != null && i !== selected &&
           (rowOf(i) === rowOf(selected) || colOf(i) === colOf(selected));
